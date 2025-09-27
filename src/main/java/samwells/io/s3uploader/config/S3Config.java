@@ -10,6 +10,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 public class S3Config {
     @Bean
     S3Client s3Client() {
+        // This is using the least performant, synchronous client
         return S3Client
                 .builder()
                 .region(Region.CA_CENTRAL_1)
