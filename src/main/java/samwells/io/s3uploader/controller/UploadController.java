@@ -12,10 +12,16 @@ import samwells.io.s3uploader.service.UploadService;
 public class UploadController {
     private final UploadService syncUploadService;
     private final UploadService asyncUploadService;
+    private final UploadService managedUploadService;
 
-    public UploadController(@Qualifier("sync") UploadService uploadService, @Qualifier("async") UploadService asyncUploadService) {
+    public UploadController(
+            @Qualifier("sync") UploadService uploadService,
+            @Qualifier("async") UploadService asyncUploadService,
+            @Qualifier("managed") UploadService managedUploadService
+    ) {
         this.syncUploadService = uploadService;
         this.asyncUploadService = asyncUploadService;
+        this.managedUploadService = managedUploadService;
     }
 
     @PostMapping
@@ -23,11 +29,15 @@ public class UploadController {
     public ResponseEntity<String> upload(@RequestParam("file") MultipartFile file, @RequestParam("mode") String mode) {
         if (mode.equals("sync")) {
             syncUploadService.upload(file);
-            return ResponseEntity.ok("we made it b");
+            return ResponseEntity.ok("we made it b - sync");
         }
         if (mode.equals("async")) {
             asyncUploadService.upload(file);
-            return ResponseEntity.ok("we made it b");
+            return ResponseEntity.ok("we made it b - async");
+        }
+        if (mode.equals("managed")) {
+            managedUploadService.upload(file);
+            return ResponseEntity.ok("we made it b - managed");
         }
 
         return ResponseEntity.badRequest().body("Bad request b");

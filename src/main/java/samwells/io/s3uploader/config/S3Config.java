@@ -3,11 +3,14 @@ package samwells.io.s3uploader.config;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.VirtualThreadTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.transfer.s3.S3TransferManager;
 
 @Configuration
 public class S3Config {
@@ -27,9 +30,27 @@ public class S3Config {
     S3AsyncClient s3AsyncClient() {
         return S3AsyncClient
                 .builder()
+                .multipartEnabled(true)
                 .region(Region.CA_CENTRAL_1)
                  // Use AWS SSO CLI and custom profile - Sign in via CLI and the SDK handles the rest 😘
                 .credentialsProvider(ProfileCredentialsProvider.create("s3-uploader"))
+                .build();
+    }
+
+    @Bean
+    VirtualThreadTaskExecutor taskExecutor() {
+        return new VirtualThreadTaskExecutor("virtual-");
+    }
+
+    @Bean
+    S3TransferManager transferManager(
+            S3AsyncClient s3AsyncClient,
+            VirtualThreadTaskExecutor executor
+    ) {
+        return S3TransferManager
+                .builder()
+                .s3Client(s3AsyncClient)
+                .executor(executor)
                 .build();
     }
 }

@@ -30,6 +30,7 @@ dependencies {
 
     // S3
     implementation("software.amazon.awssdk:s3:2.34.4")
+    implementation("software.amazon.awssdk:s3-transfer-manager:2.34.4")
 
     // AWS SSO
     implementation("software.amazon.awssdk:sso:2.34.4")
