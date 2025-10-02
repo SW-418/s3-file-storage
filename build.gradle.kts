@@ -27,6 +27,11 @@ repositories {
 dependencies {
     // API
 	implementation("org.springframework.boot:spring-boot-starter-web")
+	implementation("org.springframework.boot:spring-boot-starter-validation")
+
+    // DB
+    implementation("com.h2database:h2")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
     // S3
     implementation("software.amazon.awssdk:s3:2.34.4")
