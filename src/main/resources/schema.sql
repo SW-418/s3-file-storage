@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS upload (
 CREATE TABLE IF NOT EXISTS upload_part (
     id                  BIGSERIAL PRIMARY KEY,
     upload_id           BIGINT NOT NULL,
-    url                 VARCHAR(250) NOT NULL,
+    url                 VARCHAR(2048) NOT NULL,
     part_number         BIGINT NOT NULL,
     completion_tag      VARCHAR(250),
     part_size_in_bytes  BIGINT NOT NULL,
