@@ -7,6 +7,7 @@ import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.transfer.s3.S3TransferManager;
 
 @Configuration
@@ -48,6 +49,17 @@ public class S3Config {
                 .builder()
                 .s3Client(s3AsyncClient)
                 .executor(executor)
+                .build();
+    }
+
+    @Bean
+    S3Presigner s3Presigner(S3Client s3Client) {
+        return S3Presigner
+                .builder()
+                .s3Client(s3Client)
+                .region(Region.CA_CENTRAL_1)
+                // Use AWS SSO CLI and custom profile - Sign in via CLI and the SDK handles the rest 😘
+                .credentialsProvider(ProfileCredentialsProvider.create("s3-uploader"))
                 .build();
     }
 }
