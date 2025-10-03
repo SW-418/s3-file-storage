@@ -1,5 +1,6 @@
 package samwells.io.s3uploader.service;
 
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -18,13 +19,10 @@ import java.util.List;
 @Service
 @Slf4j
 @Qualifier("sync")
+@AllArgsConstructor
 public class S3SynchronousUploadService implements UploadService {
     private final S3Client s3Client;
     private final String BUCKET_NAME = "s3-uploader-storage";
-
-    public S3SynchronousUploadService(S3Client s3Client) {
-        this.s3Client = s3Client;
-    }
 
     @Override
     public void upload(MultipartFile file) {
