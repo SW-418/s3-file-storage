@@ -9,9 +9,7 @@ import samwells.io.s3uploader.model.MultipartUpload;
 import samwells.io.s3uploader.model.UploadPart;
 import samwells.io.s3uploader.repository.UploadRepository;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
-import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
-import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
-import software.amazon.awssdk.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedUploadPartRequest;
 import software.amazon.awssdk.services.s3.presigner.model.UploadPartPresignRequest;
@@ -21,6 +19,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 @Slf4j
 @Service
@@ -83,6 +82,27 @@ public class ClientManualUploadService implements ClientUploadService {
         }
     }
 
+    @Override
+    @Transactional
+    public void abortUpload(Long id) {
+        Upload upload = uploadRepository.getReferenceById(id);
+        String uploadId = upload.getExternalId();
+        String fileName = upload.getFileName();
+
+        try {
+            abortMultipartUpload(uploadId, fileName)
+                    .thenCompose(abortResponse -> {
+                        log.info("Aborted multipart upload");
+                        return CompletableFuture.completedFuture(null);
+                    }).get();
+        } catch (Exception ex) {
+            log.error("Failed to abort multipart upload");
+            throw new RuntimeException(ex);
+        }
+
+        uploadRepository.delete(upload);
+    }
+
     private CompletableFuture<CreateMultipartUploadResponse> createMultipartUpload(String fileName) {
         CreateMultipartUploadRequest request = CreateMultipartUploadRequest
                 .builder()
@@ -90,6 +110,17 @@ public class ClientManualUploadService implements ClientUploadService {
                 .key(fileName)
                 .build();
         return s3AsyncClient.createMultipartUpload(request);
+    }
+
+    private CompletableFuture<AbortMultipartUploadResponse> abortMultipartUpload(String uploadId, String fileName) {
+        AbortMultipartUploadRequest request = AbortMultipartUploadRequest
+                .builder()
+                .key(fileName)
+                .uploadId(uploadId)
+                .bucket(BUCKET_NAME)
+                .build();
+
+        return s3AsyncClient.abortMultipartUpload(request);
     }
 
     private List<UploadPart> createUploadParts(String uploadId, String fileName, long fileSizeInBytes) {

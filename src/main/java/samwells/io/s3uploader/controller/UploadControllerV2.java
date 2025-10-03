@@ -2,12 +2,10 @@ package samwells.io.s3uploader.controller;
 
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 import samwells.io.s3uploader.dto.CreateUploadRequestDto;
-import samwells.io.s3uploader.dto.CreateUploadResponseDto;
+import samwells.io.s3uploader.dto.UploadResponseDto;
 import samwells.io.s3uploader.dto.UploadDataDto;
 import samwells.io.s3uploader.model.MultipartUpload;
 import samwells.io.s3uploader.service.ClientUploadService;
@@ -19,13 +17,13 @@ public class UploadControllerV2 {
     private final ClientUploadService clientUploadService;
 
     @PostMapping
-    CreateUploadResponseDto createUpload(@Valid @RequestBody CreateUploadRequestDto createUploadRequestDto) {
+    UploadResponseDto createUpload(@Valid @RequestBody CreateUploadRequestDto createUploadRequestDto) {
         MultipartUpload multipartUpload = clientUploadService.initiateUpload(
                 createUploadRequestDto.fileName(),
                 createUploadRequestDto.fileSizeInBytes()
         );
 
-        return new CreateUploadResponseDto(
+        return new UploadResponseDto(
                 multipartUpload.id(),
                 multipartUpload
                         .uploadParts()
@@ -38,5 +36,13 @@ public class UploadControllerV2 {
                         ))
                         .toList()
         );
+    }
+
+    @DeleteMapping
+    @RequestMapping("/{id}")
+    ResponseEntity<Void> deleteUpload(@PathVariable Long id) {
+        clientUploadService.abortUpload(id);
+
+        return ResponseEntity.noContent().build();
     }
 }
