@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title> S3 Upload </title>
+    </head>
+
+    <body>
+        <h1> Upload that thang </h1>
+
+        <input type="file" id="fileInput" />
+        <button id="uploadBtn">Upload</button>
+
+        <script>
+            const uploadBtn = document.getElementById('uploadBtn');
+            const fileInput = document.getElementById('fileInput');
+
+            uploadBtn.addEventListener('click', async () => {
+              const file = fileInput.files[0];
+              if (!file) {
+                alert('Select a file first');
+                return;
+              }
+
+              const fileSizeInBytes = file.size;
+              const fileName = file.name;
+              console.log(fileSizeInBytes);
+              console.log(fileName);
+
+              const baseUrl = "http://localhost:8080/api/v2/upload";
+              const uploadPartConfig = await fetch(baseUrl, {
+                method: "POST",
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fileName: fileName,
+                    fileSizeInBytes: fileSizeInBytes
+                })
+              });
+
+              console.log(uploadPartConfig);
+
+              if (!uploadPartConfig.ok) {
+                    throw new Error("Failed to retrieve upload URLs");
+              }
+
+              const { id, uploadData } = await uploadPartConfig.json();
+              console.log(id);
+              console.log(uploadData);
+              let start = 0;
+              let success = 0;
+
+
+              for (let i = 0; i < uploadData.length; i++) {
+                const chunk = file.slice(start, start + uploadData[i].partSizeInBytes);
+
+                console.log(chunk);
+
+                const s3Response = await fetch(uploadData[i].url, {
+                    method: "PUT",
+                    body: chunk
+                });
+
+                if (!s3Response.ok) {
+                    throw new Error("Failed to upload to S3");
+                }
+
+                // This should be parallelized but omitting for now
+                const completePartResult = await fetch(baseUrl + `/${id}/upload-part/${uploadData[i].id}`, {
+                    method: "PATCH",
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        completionTag: s3Response.headers.get('ETag')
+                    })
+                });
+
+                if (!completePartResult.ok) {
+                    console.log("Failed to mark upload as complete - Aborting");
+
+                    const abortResult = await fetch(baseUrl + `/${id}`, {
+                        method: "DELETE"
+                    });
+
+                    if (!abortResult.ok) {
+                        throw new Error("Failed to abort multipart upload");
+                    }
+
+                    console.log("Multipart upload aborted successfully");
+                    break;
+                }
+
+                success++;
+                console.log(s3Response.headers.get('ETag'));
+
+                start += uploadData[i].partSizeInBytes;
+              }
+
+              if (success === uploadData.length) {
+                const completionResult = await fetch(baseUrl + `/${id}`, {
+                    method: "PATCH"
+                });
+
+                if (!completionResult.ok) throw new Error("Failed to mark upload as complete");
+                alert("Upload complete")
+              }
+            });
+        </script>
+    </body>
+
+    <footer>
+
+    </footer>
+</html>
