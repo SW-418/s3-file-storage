@@ -4,10 +4,12 @@ import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import samwells.io.s3uploader.dto.CreateUploadRequestDto;
-import samwells.io.s3uploader.dto.UploadResponseDto;
-import samwells.io.s3uploader.dto.UploadDataDto;
+import samwells.io.s3uploader.dto.request.CreateUploadRequestDto;
+import samwells.io.s3uploader.dto.request.UpdateUploadPartRequest;
+import samwells.io.s3uploader.dto.response.UploadResponseDto;
+import samwells.io.s3uploader.dto.response.UploadDataDto;
 import samwells.io.s3uploader.model.MultipartUpload;
+import samwells.io.s3uploader.model.MultipartUploadPart;
 import samwells.io.s3uploader.service.ClientUploadService;
 
 @RestController
@@ -26,7 +28,7 @@ public class UploadControllerV2 {
         return new UploadResponseDto(
                 multipartUpload.id(),
                 multipartUpload
-                        .uploadParts()
+                        .multipartUploadParts()
                         .stream()
                         .map(uploadPart -> new UploadDataDto(
                                 uploadPart.id(),
@@ -36,6 +38,23 @@ public class UploadControllerV2 {
                         ))
                         .toList()
         );
+    }
+
+    @PatchMapping
+    @RequestMapping("/{uploadId}/upload-part/{uploadPartId}")
+    UploadDataDto updateUploadPart(
+            @PathVariable Long uploadId,
+            @PathVariable Long uploadPartId,
+            @RequestBody @Valid UpdateUploadPartRequest request
+    ) {
+        // In a real project this should be more generic and extendable ofc
+        MultipartUploadPart uploadPart = clientUploadService.completeUploadPart(
+                uploadId,
+                uploadPartId,
+                request.completionTag()
+        );
+
+        return new UploadDataDto(uploadPart);
     }
 
     @DeleteMapping

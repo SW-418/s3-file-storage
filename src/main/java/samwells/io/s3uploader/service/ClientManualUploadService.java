@@ -5,8 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import samwells.io.s3uploader.entity.Upload;
+import samwells.io.s3uploader.entity.UploadPart;
+import samwells.io.s3uploader.exception.UploadPartAlreadyCompleteException;
 import samwells.io.s3uploader.model.MultipartUpload;
-import samwells.io.s3uploader.model.UploadPart;
+import samwells.io.s3uploader.model.MultipartUploadPart;
+import samwells.io.s3uploader.repository.UploadPartRepository;
 import samwells.io.s3uploader.repository.UploadRepository;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.*;
@@ -19,7 +22,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 @Slf4j
 @Service
@@ -30,6 +32,7 @@ public class ClientManualUploadService implements ClientUploadService {
 
     private final S3AsyncClient s3AsyncClient;
     private final UploadRepository uploadRepository;
+    private final UploadPartRepository uploadPartRepository;
     private final S3Presigner s3Presigner;
 
     @Override
@@ -44,15 +47,15 @@ public class ClientManualUploadService implements ClientUploadService {
             upload.setExternalId(uploadId);
             upload.setDirectoryName(BUCKET_NAME);
             upload.setFileName(fileName);
-            List<UploadPart> uploadParts = createUploadParts(uploadId, fileName, fileSizeInBytes);
+            List<MultipartUploadPart> multipartUploadParts = createUploadParts(uploadId, fileName, fileSizeInBytes);
 
             // Create UploadPart entity and add to Upload
-            uploadParts.forEach(uploadPart -> {
+            multipartUploadParts.forEach(multipartUploadPart -> {
                 samwells.io.s3uploader.entity.UploadPart uploadPartEntity = new samwells.io.s3uploader.entity.UploadPart();
 
-                uploadPartEntity.setPartNumber(uploadPart.partNumber());
-                uploadPartEntity.setPartSizeInBytes(uploadPart.partSizeInBytes());
-                uploadPartEntity.setUrl(uploadPart.url());
+                uploadPartEntity.setPartNumber(multipartUploadPart.partNumber());
+                uploadPartEntity.setPartSizeInBytes(multipartUploadPart.partSizeInBytes());
+                uploadPartEntity.setUrl(multipartUploadPart.url());
 
                 upload.addUploadPart(uploadPartEntity);
             });
@@ -62,17 +65,12 @@ public class ClientManualUploadService implements ClientUploadService {
 
         try {
             return uploadEntityFuture.thenCompose(upload -> {
-                MultipartUpload result = new MultipartUpload(upload.getId());
+                List<MultipartUploadPart> uploadParts = upload.getUploadParts()
+                        .stream()
+                        .map(MultipartUploadPart::new)
+                        .toList();
 
-                upload.getUploadParts().forEach(uploadPart -> {
-                    result.uploadParts().add(new UploadPart(
-                            uploadPart.getId(),
-                            uploadPart.getPartNumber(),
-                            uploadPart.getUrl(),
-                            null,
-                            uploadPart.getPartSizeInBytes()
-                    ));
-                });
+                MultipartUpload result = new MultipartUpload(upload.getId(), uploadParts);
 
                 return CompletableFuture.completedFuture(result);
             }).get();
@@ -103,6 +101,22 @@ public class ClientManualUploadService implements ClientUploadService {
         uploadRepository.delete(upload);
     }
 
+    @Override
+    @Transactional
+    public MultipartUploadPart completeUploadPart(Long uploadId, Long uploadPartId, String completionTag) {
+        // Set etag on part if not already exists
+        UploadPart part = uploadPartRepository.getReferenceById(uploadPartId);
+
+        if (part.getCompletionTag() != null) throw new UploadPartAlreadyCompleteException(uploadId, uploadPartId);
+
+        part.setCompletionTag(completionTag);
+
+        uploadPartRepository.save(part);
+
+        // TODO: Publish message
+        return new MultipartUploadPart(part);
+    }
+
     private CompletableFuture<CreateMultipartUploadResponse> createMultipartUpload(String fileName) {
         CreateMultipartUploadRequest request = CreateMultipartUploadRequest
                 .builder()
@@ -123,8 +137,8 @@ public class ClientManualUploadService implements ClientUploadService {
         return s3AsyncClient.abortMultipartUpload(request);
     }
 
-    private List<UploadPart> createUploadParts(String uploadId, String fileName, long fileSizeInBytes) {
-        List<UploadPart> parts = new ArrayList<>();
+    private List<MultipartUploadPart> createUploadParts(String uploadId, String fileName, long fileSizeInBytes) {
+        List<MultipartUploadPart> parts = new ArrayList<>();
 
         try {
             int partNumber = 1;
@@ -148,7 +162,7 @@ public class ClientManualUploadService implements ClientUploadService {
                                 .build()
                 );
 
-                parts.add(new UploadPart(partNumber, req.url().toString(), partSize));
+                parts.add(new MultipartUploadPart(partNumber, req.url().toString(), partSize));
                 partNumber++;
             }
         } catch (Exception e) {
