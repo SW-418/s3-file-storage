@@ -30,7 +30,7 @@ public class Upload {
     @Column(name = "file_name", nullable = false)
     String fileName;
 
-    @OneToMany(mappedBy = "upload", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "upload", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     List<UploadPart> uploadParts = new ArrayList<>();
 
     @CreationTimestamp

@@ -7,4 +7,5 @@ public interface ClientUploadService {
     MultipartUpload initiateUpload(String fileName, long fileSizeInBytes);
     void abortUpload(Long id);
     MultipartUploadPart completeUploadPart(Long uploadId, Long uploadPartId, String completionTag);
+    void completeUpload(Long uploadId);
 }

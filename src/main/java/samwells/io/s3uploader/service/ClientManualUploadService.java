@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import samwells.io.s3uploader.entity.Upload;
 import samwells.io.s3uploader.entity.UploadPart;
+import samwells.io.s3uploader.exception.MultipartUploadCompletionException;
+import samwells.io.s3uploader.exception.MultipartUploadFailedException;
 import samwells.io.s3uploader.exception.UploadPartAlreadyCompleteException;
 import samwells.io.s3uploader.model.MultipartUpload;
 import samwells.io.s3uploader.model.MultipartUploadPart;
@@ -22,6 +24,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 @Slf4j
 @Service
@@ -117,6 +120,16 @@ public class ClientManualUploadService implements ClientUploadService {
         return new MultipartUploadPart(part);
     }
 
+    @Override
+    public void completeUpload(Long uploadId) {
+        Upload upload = uploadRepository.getUploadAndPartsByUploadId(uploadId);
+        try {
+            completeMultipartUpload(upload.getExternalId(), upload.getFileName(), upload.getUploadParts()).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new MultipartUploadCompletionException("Encountered error completing upload");
+        }
+    }
+
     private CompletableFuture<CreateMultipartUploadResponse> createMultipartUpload(String fileName) {
         CreateMultipartUploadRequest request = CreateMultipartUploadRequest
                 .builder()
@@ -135,6 +148,35 @@ public class ClientManualUploadService implements ClientUploadService {
                 .build();
 
         return s3AsyncClient.abortMultipartUpload(request);
+    }
+
+    private CompletableFuture<CompleteMultipartUploadResponse> completeMultipartUpload(String uploadId, String fileName, List<UploadPart> uploadParts) {
+        List<CompletedPart> completedParts = uploadParts
+                .stream()
+                .map(part -> {
+                    if (part.getCompletionTag() == null || part.getCompletionTag().isEmpty()) {
+                        throw new MultipartUploadCompletionException(
+                                String.format("Upload part with id %s did not have a completion tag. This is required to complete the upload", part.getId())
+                        );
+                    }
+
+                    return CompletedPart
+                            .builder()
+                            .eTag(part.getCompletionTag())
+                            .partNumber(part.getPartNumber())
+                            .build();
+                })
+                .toList();
+
+        CompleteMultipartUploadRequest request = CompleteMultipartUploadRequest
+                .builder()
+                .key(fileName)
+                .uploadId(uploadId)
+                .bucket(BUCKET_NAME)
+                .multipartUpload(CompletedMultipartUpload.builder().parts(completedParts).build())
+                .build();
+
+        return s3AsyncClient.completeMultipartUpload(request);
     }
 
     private List<MultipartUploadPart> createUploadParts(String uploadId, String fileName, long fileSizeInBytes) {

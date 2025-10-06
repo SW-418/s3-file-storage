@@ -64,4 +64,12 @@ public class UploadControllerV2 {
 
         return ResponseEntity.noContent().build();
     }
+
+    @PatchMapping("/{id}")
+    // Would have a body here but omitting now to reduce complexity
+    ResponseEntity<Void> completeUpload(@PathVariable Long id) {
+        clientUploadService.completeUpload(id);
+
+        return ResponseEntity.noContent().build();
+    }
 }
