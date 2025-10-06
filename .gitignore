@@ -1,6 +1,7 @@
 .gradle
 .idea
 infra/.terraform
+infra/plan.tf
 build
 bin
 .DS_STORE
